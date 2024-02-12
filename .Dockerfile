@@ -38,7 +38,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 	
 	
-RUN mkdir /var/www/html/devlaravel
+#RUN mkdir /var/www/html/devlaravel
 
 # Instalar Xdebug
 RUN apt-get update
@@ -68,7 +68,7 @@ RUN git clone https://github.com/jenhsun/oh-my-git-patched.git ~/.oh-my-git && e
 RUN echo "source /usr/share/bash-completion/completions/git" >> ~/.bashrc
 
 # clone github repositorio
-RUN git clone API_URL /var/www/html/devlaravel
+RUN git clone ${API_URL} /var/www/html
 
 # Instalar Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
@@ -85,17 +85,17 @@ RUN apt-get update && \
 
 
 # Establecer el directorio de trabajo
-WORKDIR /var/www/html/devlaravel
+WORKDIR /var/www/html/laravel-environment-for-docker
 
 
 # Instalar Laravel
-composer create-project --prefer-dist laravel/laravel .
+RUN composer create-project --prefer-dist laravel/laravel .
 
 # Instalar breeze
-composer require laravel/breeze --dev
-php artisan breeze:install
-npm install && npm run dev
-php artisan migrate
+RUN composer require laravel/breeze --dev
+RUN php artisan breeze:install
+RUN npm install && npm run dev
+RUN php artisan migrate
 # vue
 #npm install vue@next
 
@@ -103,7 +103,7 @@ php artisan migrate
 EXPOSE 80 3306 443
 
 # Agregar el archivo de configuración del virtual host
-COPY ../conf/devlaravel.conf /etc/apache2/sites-available/
+COPY ./conf/devlaravel.conf /etc/apache2/sites-available/
 
 # RUN a2enmod ssl 
 
