@@ -1,10 +1,10 @@
+# Use la imagen base de Ubuntu 22.04
 FROM ubuntu:22.04
 
 # Argumentos
-ARG GIT_URL
+ARG ENV_FILE=./.env
+RUN if [ -f $ENV_FILE ]; then export $(grep -v '^#' $ENV_FILE | xargs -0); fi
 
-# Variables de entorno
-ENV API_URL=${GIT_URL}
 ENV DEBIAN_FRONTEND noninteractive
 
 # Establecer el idioma español
@@ -22,101 +22,92 @@ RUN apt-get update && \
 RUN add-apt-repository ppa:ondrej/php && \
     apt-get update
 
-# Instalar PHP 8.2 y las extensiones necesarias
+# Instalar PHP 8.3 y las extensiones necesarias
+# Actualizar el sistema e instalar los paquetes necesarios
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     apache2 \
-    libapache2-mod-php8.1 \
-    php8.2 \
-    php8.2-common \
-    php8.2-mysql \
-    php8.2-mbstring \
-    php8.2-xml \
-    php8.2-zip \
-    php8.2-gd \
-    mariadb-server \
+    libapache2-mod-php8.3 \
+    php8.3 \
+    php8.3-curl \
+    php8.3-common \
+    php8.3-mysql \
+    php8.3-mbstring \
+    php8.3-xml \
+    php8.3-zip \
+    php8.3-gd \
+    php-pear \
+    mysql-server \
+    zip \
+    unzip \
+    php8.3-dev \
     && rm -rf /var/lib/apt/lists/*
-	
-	
-#RUN mkdir /var/www/html/devlaravel
+
+# Actualizar el índice de paquetes e instalar cURL
+RUN apt-get update && apt-get install -y curl
 
 # Instalar Xdebug
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install -y php-xml
-RUN apt-get install -y php-dev
-RUN apt-get install -y php-pear
-RUN apt-get install -y tar
-RUN pecl install xdebug
-RUN apt install php8.2-xdebug
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y php-xml php-dev php-pear tar && \
+    pecl install xdebug && \
+    apt install -y php8.3-xdebug
 
 # Agregar la configuracion de Xdebug
-RUN echo "xdebug.mode=debug" >> /etc/php/8.2/mods-available/xdebug.ini
-RUN echo "xdebug.start_with_request=yes" >> /etc/php/8.2/mods-available/xdebug.ini
-RUN echo "xdebug.client_host=host.docker.internal" >> /etc/php/8.2/mods-available/xdebug.ini
-RUN echo "xdebug.client_port=9003" >> /etc/php/8.2/mods-available/xdebug.ini
+RUN echo "xdebug.mode=debug" >> /etc/php/8.3/mods-available/xdebug.ini
+RUN echo "xdebug.start_with_request=yes" >> /etc/php/8.3/mods-available/xdebug.ini
+RUN echo "xdebug.client_host=host.docker.internal" >> /etc/php/8.3/mods-available/xdebug.ini
+RUN echo "xdebug.client_port=9003" >> /etc/php/8.3/mods-available/xdebug.ini
 
-RUN echo "source /root/.bash_aliases" >> /root/.bashrc
-# Set a cool prompt
-RUN echo "PS1='\[\033[1;36m\][WebServer]\[\033[1;34m\] [\u] [\w]\n\\$ \[\033[0m\]'" >> /root/.bashrc
+# Clonar el repositorio desde la variable de entorno
+# RUN git clone $GIT_URL /var/www/html || true
+# Establecer el directorio de trabajo
 
+WORKDIR /var/www/html
 
-# Install oh my git! terminal bash bar
-RUN git clone https://github.com/jenhsun/oh-my-git-patched.git ~/.oh-my-git && echo source ~/.oh-my-git/prompt.sh >> /root/.bashrc
+# Actualizar los repositorios e instalar las dependencias necesarias
+RUN apt-get update \
+    && apt-get install -y curl git nano
 
-# Enable git completion
-RUN echo "source /usr/share/bash-completion/completions/git" >> ~/.bashrc
+# Descargar e instalar la versión más reciente de Node.js y npm
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest
 
-# clone github repositorio
-RUN git clone ${API_URL} /var/www/html
+RUN apt-get install -y php8.3-curl
 
 # Instalar Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
-RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-RUN php composer-setup.php
-RUN php -r "unlink('composer-setup.php');"
-RUN mv composer.phar /usr/local/bin/composer
+# Eliminar contenido existente en /var/www/html
+RUN rm -rf /var/www/html/*
+# Instalar Laravel en el directorio /var/www/html
+RUN composer create-project --prefer-dist laravel/laravel /var/www/html --ignore-platform-reqs
 
-# Instalar Node.js y npm
-RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
-    apt-get install -y nodejs
-
-
-# Establecer el directorio de trabajo
-WORKDIR /var/www/html/laravel-environment-for-docker
-
-
-# Instalar Laravel
-RUN composer create-project --prefer-dist laravel/laravel .
 
 # Instalar breeze
-RUN composer require laravel/breeze --dev
-RUN php artisan breeze:install
-RUN npm install && npm run dev
-RUN php artisan migrate
-# vue
-#npm install vue@next
+#RUN composer require laravel/breeze --dev
+#RUN php artisan cache:clear
+#RUN php artisan breeze:install
+#RUN npm install && npm run dev
+#RUN php artisan migrate
 
-# Exponer el puerto 80 y 3306
+
+# Exponer los puertos
 EXPOSE 80 3306 443
 
 # Agregar el archivo de configuración del virtual host
 COPY ./conf/devlaravel.conf /etc/apache2/sites-available/
 
-# RUN a2enmod ssl 
-
 # Habilitar el virtual host y deshabilitar el sitio predeterminado
 RUN a2ensite devlaravel.conf && a2dissite 000-default.conf
 
-# Habilitar modulo rewrite
+# Habilitar el módulo rewrite
 RUN a2enmod rewrite
 
 RUN echo "ServerName localhost" >> /etc/apache2/httpd.conf
 
-# Copiar el archivo de configuración de MySQL al contenedor
-COPY my.cnf /etc/mysql/my.cnf
+# Agregar el archivo de configuración de MySQL al contenedor
+COPY ./conf/my.cnf /etc/mysql/my.cnf
 
 # Cambiar el usuario de MySQL al usuario "mysql" existente en el contenedor
 RUN sed -i 's/user\s*=\s*mysql/user=mysql/g' /etc/mysql/my.cnf
@@ -124,15 +115,23 @@ RUN sed -i 's/user\s*=\s*mysql/user=mysql/g' /etc/mysql/my.cnf
 # Reiniciar el servicio de MySQL para aplicar los cambios en la configuración
 RUN service mysql restart
 
-# colores git en la terminal
+# Configurar los colores de git en la terminal
 RUN git config --global color.ui true
 
-RUN apt-get install nano
+# Configurar el prompt de la terminal
+RUN echo "PS1='\[\033[1;36m\][WebServer]\[\033[1;34m\] [\u] [\w]\n\\$ \[\033[0m\]'" >> /root/.bashrc
+
+# Instalar oh my git! para la terminal bash
+RUN git clone https://github.com/jenhsun/oh-my-git-patched.git ~/.oh-my-git && echo source ~/.oh-my-git/prompt.sh >> /root/.bashrc
+
+# Habilitar la autocompletación de git
+RUN echo "source /usr/share/bash-completion/completions/git" >> ~/.bashrc
+
+# Ejecutar composer update
+RUN composer update
 
 # Iniciar MySQL y Apache en primer plano
 CMD service mysql start && apachectl -D FOREGROUND
 
-RUN composer update
-
-# docker run --privileged -p 80:80 -p 443:443 -p 3306:330 -p 9003:9003 dockerfile
-
+# docker run --privileged -p 80:80 -p 443:443 -p 3306:330 -p 9003:9003 -d --name laravel laravel:10
+# docker build -t laravel:10 -f .Dockerfile .
