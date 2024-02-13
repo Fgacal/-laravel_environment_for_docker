@@ -83,6 +83,8 @@ RUN rm -rf /var/www/html/*
 # Instalar Laravel en el directorio /var/www/html
 RUN composer create-project --prefer-dist laravel/laravel /var/www/html --ignore-platform-reqs
 
+RUN chmod 777 -R storage/
+
 
 # Instalar breeze
 #RUN composer require laravel/breeze --dev
